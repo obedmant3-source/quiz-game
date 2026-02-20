@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Космическая Викторина: Онлайн</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;700&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Exo 2', sans-serif;
+            background: linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 50%, #0f0f2e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* --- BACKGROUND --- */
+        .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .star { position: absolute; background: white; border-radius: 50%; animation: twinkle var(--duration) ease-in-out infinite; }
+        @keyframes twinkle { 0%, 100% { opacity: var(--opacity); transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+        .planet { position: absolute; border-radius: 50%; opacity: 0.1; z-index: 0; }
+        .planet-1 { width: 200px; height: 200px; background: radial-gradient(circle at 30% 30%, #ff00ff, #8000ff); top: 10%; right: 10%; animation: orbit 20s linear infinite; }
+        .planet-2 { width: 150px; height: 150px; background: radial-gradient(circle at 30% 30%, #00ffff, #0080ff); bottom: 10%; left: 5%; animation: orbit 25s linear infinite reverse; }
+        @keyframes orbit { from { transform: rotate(0deg) translateX(50px) rotate(0deg); } to { transform: rotate(360deg) translateX(50px) rotate(-360deg); } }
+
+        /* --- CONTAINER --- */
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 30px;
+            box-shadow: 0 0 60px rgba(0, 255, 255, 0.2), inset 0 0 60px rgba(0, 255, 255, 0.05);
+            text-align: center;
+            width: 90%;
+            max-width: 650px;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            position: relative;
+            z-index: 1;
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #00ffff);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient 3s ease infinite;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+        }
+        @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .subtitle { color: #a0a0ff; margin-bottom: 2rem; font-size: 1rem; }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- UI ELEMENTS --- */
+        .btn {
+            background: linear-gradient(45deg, #00ffff, #0080ff);
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        }
+        .btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 10px 30px rgba(0, 255, 255, 0.6); }
+        .btn-secondary { background: linear-gradient(45deg, #ff00ff, #8000ff); box-shadow: 0 0 20px rgba(255, 0, 255, 0.4); }
+        .btn-start { background: linear-gradient(45deg, #00ff00, #008000); color: #000; width: 100%; margin-top: 20px; font-size: 1.2rem; }
+        .btn-back { background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 14px; padding: 10px 25px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+
+        input {
+            padding: 15px;
+            border-radius: 15px;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            width: 100%;
+            margin-bottom: 15px;
+            font-size: 16px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            text-align: center;
+        }
+        input:focus { outline: none; border-color: #00ffff; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3); }
+
+        .room-code-display {
+            background: linear-gradient(45deg, #00ffff, #0080ff);
+            color: #000;
+            padding: 15px;
+            border-radius: 15px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin: 15px 0;
+            letter-spacing: 5px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+        /* --- LOBBY GRID --- */
+        .lobby-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .team-slot {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            min-height: 60px;
+            transition: 0.3s;
+        }
+        .team-slot.filled {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+            animation: popIn 0.3s ease;
+        }
+        .team-slot.creator { border-color: #ff00ff; background: rgba(255, 0, 255, 0.1); position: relative; }
+        .team-slot.creator::after { content: '👑'; position: absolute; top: -10px; right: -5px; font-size: 20px; }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* --- GAME UI --- */
+        .game-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 10px; font-size: 14px; }
+        .info-value { color: #00ffff; font-family: 'Orbitron'; font-weight: bold; }
+        
+        .question-box { font-size: 1.3rem; margin: 20px 0; color: #fff; min-height: 70px; display: flex; align-items: center; justify-content: center; }
+        
+        .options button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            border-radius: 15px;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 16px;
+        }
+        .options button:hover:not(:disabled) { background: rgba(0, 255, 255, 0.2); border-color: #00ffff; transform: translateX(5px); }
+        
+        .options button.correct { background: rgba(0, 255, 0, 0.3) !important; border-color: #00ff00 !important; box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); }
+        .options button.wrong { background: rgba(255, 0, 0, 0.3) !important; border-color: #ff0000 !important; opacity: 0.6; }
+
+        .hidden { display: none !important; }
+        .loading-spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-left-color: #00ffff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+    <div class="planet planet-1"></div>
+    <div class="planet planet-2"></div>
+
+    <div class="container">
+        <!-- 1. HOME -->
+        <div id="screen-home" class="screen active">
+            <h1>🚀 КОСМИЧЕСКАЯ ВИКТОРИНА</h1>
+            <p class="subtitle">Сетевая игра для 7 класса</p>
+            <button class="btn" onclick="goToScreen('screen-create')">🌟 Создать комнату</button>
+            <button class="btn btn-secondary" onclick="goToScreen('screen-lobby-join')">🔑 Войти в комнату</button>
+        </div>
+
+        <!-- 2. CREATE -->
+        <div id="screen-create" class="screen">
+            <h1>🌟 Создание базы</h1>
+            <p class="subtitle">Придумай название своей команды</p>
+            <input type="text" id="create-team-name" placeholder="Название команды" maxlength="12">
+            <div class="room-code-display" id="generated-code">----</div>
+            <p style="color: #a0a0ff; font-size: 13px; margin-bottom: 20px;">
+                Отправь этот код друзьям
+            </p>
+            <button class="btn" onclick="createRoom()">📡 Ждать игроков</button>
+            <button class="btn btn-back" onclick="goToScreen('screen-home')">← Назад</button>
+        </div>
+
+        <!-- 3. JOIN INPUT -->
+        <div id="screen-lobby-join" class="screen">
+            <h1>🔑 Вход на борт</h1>
+            <p class="subtitle">Введи код комнаты и своё имя</p>
+            <input type="text" id="join-room-code" placeholder="Код комнаты (4 цифры)">
+            <input type="text" id="join-team-name" placeholder="Название команды" maxlength="12">
+            <button class="btn" onclick="joinRoomRequest()">🛸 Подключиться</button>
+            <button class="btn btn-back" onclick="goToScreen('screen-home')">← Назад</button>
+        </div>
+
+        <!-- 4. LOBBY WAIT -->
+        <div id="screen-lobby-wait" class="screen">
+            <h1>📡 Ожидание экипажа</h1>
+            <p class="subtitle">Комната: <span id="lobby-room-code" style="color:#00ffff; font-weight:bold;"></span></p>
+            
+            <div class="lobby-grid" id="teams-grid">
+                <!-- Slots generated by JS -->
+            </div>
+
+            <div id="creator-controls" class="hidden">
+                <p style="color: #00ff00; font-size: 12px; margin-bottom: 5px;">Вы создатель комнаты</p>
+                <button class="btn btn-start" id="btn-start-game" onclick="startGame()">🚀 НАЧАТЬ ИГРУ</button>
+            </div>
+            <div id="player-controls">
+                <p style="color: #a0a0ff; font-size: 12px;">Ожидание старта создателем...</p>
+                <div class="loading-spinner"></div>
+            </div>
+            <button class="btn btn-back" onclick="leaveRoom()" style="margin-top: 20px;">❌ Выйти</button>
+        </div>
+
+        <!-- 5. GAME -->
+        <div id="screen-game" class="screen">
+            <div class="game-info">
+                <div>Команда: <span class="info-value" id="game-team">-</span></div>
+                <div>Счёт: <span class="info-value" id="game-score">0</span></div>
+            </div>
+            <div class="question-box" id="question-text">Загрузка...</div>
+            <div class="options" id="options-container"></div>
+            <p id="wait-message" class="hidden" style="color: #ffff00; margin-top: 20px;">Ожидание остальных игроков...</p>
+        </div>
+
+        <!-- 6. RESULTS -->
+        <div id="screen-results" class="screen">
+            <h1>🏆 Миссия завершена</h1>
+            <div style="font-size: 5rem; margin: 20px 0;">🌟</div>
+            <p class="subtitle">Итоговый результат:</p>
+            <div class="room-code-display" id="final-score" style="font-size: 3rem;">0</div>
+            <p id="result-text" style="color: #a0a0ff; margin: 20px 0;"></p>
+            <button class="btn" onclick="location.reload()">🔄 В меню</button>
+        </div>
+    </div>
+
+    <!-- FIREBASE SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <script>
+        // ==========================================
+        // 🔥 ТВОЙ FIREBASE CONFIG
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDqebE8d-vfQZTa8kA6cQAv_qDdXqhlElo",
+            authDomain: "spacequiz-91362.firebaseapp.com",
+            databaseURL: "https://spacequiz-91362-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "spacequiz-91362",
+            storageBucket: "spacequiz-91362.firebasestorage.app",
+            messagingSenderId: "793208735781",
+            appId: "1:793208735781:web:1d15b22b37d19270f897cc",
+            measurementId: "G-7MJHFXHLZX"
+        };
+        // ==========================================
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- VISUALS ---
+        function createStars() {
+            const container = document.getElementById('stars');
+            for(let i=0; i<100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random()*100 + '%';
+                star.style.top = Math.random()*100 + '%';
+                star.style.width = Math.random()*3 + 'px';
+                star.style.height = star.style.width;
+                star.style.setProperty('--duration', (Math.random()*3+2)+'s');
+                star.style.setProperty('--opacity', Math.random());
+                container.appendChild(star);
+            }
+        }
+        createStars();
+
+        // --- DATA ---
+        const questions = [
+            { q: "Столица Франции?", a: ["Париж", "Лондон", "Берлин", "Рим"], c: 0 },
+            { q: "2 + 2 × 2 = ?", a: ["6", "8", "4", "10"], c: 0 },
+            { q: "Самая длинная река?", a: ["Нил", "Амазонка", "Волга", "Миссисипи"], c: 1 },
+            { q: "Планет в Солнечной системе?", a: ["7", "8", "9", "10"], c: 1 },
+            { q: "Формула воды?", a: ["CO2", "H2O", "O2", "NaCl"], c: 1 },
+            { q: "Самое быстрое животное?", a: ["Лев", "Гепард", "Антилопа", "Сокол"], c: 1 },
+            { q: "Гагарин полетел в...", a: ["1959", "1961", "1963", "1965"], c: 1 },
+            { q: "Материков на Земле?", a: ["5", "6", "7", "8"], c: 1 },
+            { q: "Самый большой океан?", a: ["Атлантический", "Индийский", "Тихий", "Северный"], c: 2 },
+            { q: "Дней в високосном году?", a: ["364", "365", "366", "367"], c: 2 },
+            { q: "Газ для дыхания?", a: ["Азот", "Кислород", "Углекислый", "Гелий"], c: 1 },
+            { q: "Высочайшая гора?", a: ["К2", "Эверест", "Килиманджаро", "Эльбрус"], c: 1 },
+            { q: "Хромосом у человека?", a: ["42", "44", "46", "48"], c: 2 },
+            { q: "Автор 'Войны и мира'?", a: ["Достоевский", "Чехов", "Толстой", "Пушкин"], c: 2 },
+            { q: "Самое глубокое озеро?", a: ["Виктория", "Байкал", "Танганьика", "Верхнее"], c: 1 },
+            { q: "Бит в байте?", a: ["4", "8", "16", "32"], c: 1 },
+            { q: "Жидкий металл?", a: ["Свинец", "Ртуть", "Алюминий", "Цинк"], c: 1 },
+            { q: "Цветов в радуге?", a: ["5", "6", "7", "8"], c: 2 },
+            { q: "Самая большая страна?", a: ["Китай", "США", "Канада", "Россия"], c: 3 },
+            { q: "Спутник Земли?", a: ["Фобос", "Луна", "Европа", "Титан"], c: 1 },
+            { q: "Ног у паука?", a: ["6", "8", "10", "12"], c: 1 },
+            { q: "Витамин от солнца?", a: ["A", "B", "C", "D"], c: 3 },
+            { q: "Самое большое животное?", a: ["Слон", "Синий кит", "Жираф", "Акула"], c: 1 },
+            { q: "Граней у куба?", a: ["4", "6", "8", "12"], c: 1 },
+            { q: "Самая большая планета?", a: ["Сатурн", "Юпитер", "Уран", "Нептун"], c: 1 },
+            { q: "Зубов у взрослого?", a: ["28", "30", "32", "34"], c: 2 },
+            { q: "Самый маленький океан?", a: ["Индийский", "Атлантический", "Сев. Ледовитый", "Южный"], c: 2 },
+            { q: "Секунд в часе?", a: ["3000", "3600", "4000", "4200"], c: 1 },
+            { q: "Орган очистки крови?", a: ["Сердце", "Печень", "Почки", "Легкие"], c: 2 },
+            { q: "Самый твердый минерал?", a: ["Гранит", "Алмаз", "Кварц", "Мрамор"], c: 1 },
+            { q: "Валюта Японии?", a: ["Юань", "Вона", "Йена", "Доллар"], c: 2 },
+            { q: "Химический знак золота?", a: ["Ag", "Au", "Fe", "Cu"], c: 1 },
+            { q: "Сколько музы у муз?", a: ["7", "9", "10", "12"], c: 1 },
+            { q: "Самый холодный материк?", a: ["Евразия", "Антарктида", "Сев. Америка", "Африка"], c: 1 },
+            { q: "Язык программирования?", a: ["HTML", "Python", "CSS", "HTTP"], c: 1 },
+            { q: "Корень из 144?", a: ["10", "11", "12", "14"], c: 2 },
+            { q: "Столица США?", a: ["Нью-Йорк", "Вашингтон", "Лос-Анджелес", "Чикаго"], c: 1 },
+            { q: "Самое глубокое место в океане?", a: ["Яванская впадина", "Марианская впадина", "Тонга", "Филиппинская"], c: 1 },
+            { q: "Сколько сторон у треугольника?", a: ["2", "3", "4", "5"], c: 1 },
+            { q: "Кто открыл Америку?", a: ["Магеллан", "Колумб", "Веспуччи", "Кук"], c: 1 },
+            { q: "Самая маленькая птица?", a: ["Воробей", "Колибри", "Синица", "Ласточка"], c: 1 },
+            { q: "Температура кипения воды?", a: ["90°C", "100°C", "110°C", "120°C"], c: 1 },
+            { q: "Сколько часов в сутках?", a: ["12", "24", "48", "36"], c: 1 },
+            { q: "Самый большой остров?", a: ["Мадагаскар", "Гренландия", "Новая Гвинея", "Борнео"], c: 1 },
+            { q: "Кто написал 'Гамлета'?", a: ["Шекспир", "Диккенс", "Хемингуэй", "Остин"], c: 0 },
+            { q: "Сколько дней в феврале (обычный)?", a: ["27", "28", "29", "30"], c: 1 },
+            { q: "Самая длинная змея?", a: ["Кобра", "Питон", "Анаконда", "Гадюка"], c: 2 },
+            { q: "Что измеряет барометр?", a: ["Влажность", "Давление", "Температуру", "Ветер"], c: 1 },
+            { q: "Сколько граней у кубика Рубика?", a: ["4", "6", "8", "12"], c: 1 },
+            { q: "Самая высокая температура тела у?", a: ["Человека", "Птицы", "Рыбы", "Змеи"], c: 1 }
+        ];
+
+        // --- STATE ---
+        const MAX_TEAMS = 8;
+        let myRoomId = null;
+        let myTeamName = null;
+        let isCreator = false;
+        let myScore = 0;
+        let roomListener = null;
+        let gameListener = null;
+        let currentQIndex = 0; // Track current question locally
+
+        function goToScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        // --- ROOM LOGIC ---
+        function createRoom() {
+            const name = document.getElementById('create-team-name').value.trim();
+            if (!name) return alert('Введите имя команды!');
+            
+            const code = Math.floor(1000 + Math.random() * 9000).toString();
+            myRoomId = code;
+            myTeamName = name;
+            isCreator = true;
+
+            document.getElementById('generated-code').textContent = code;
+
+            db.ref('rooms/' + code).set({
+                creator: name,
+                teams: [name],
+                status: 'waiting',
+                currentQuestion: 0
+            }).then(() => {
+                goToScreen('screen-lobby-wait');
+                setupRoomListener(code);
+            });
+        }
+
+        function joinRoomRequest() {
+            const code = document.getElementById('join-room-code').value.trim();
+            const name = document.getElementById('join-team-name').value.trim();
+            
+            if (!code || !name) return alert('Заполните все поля!');
+            
+            db.ref('rooms/' + code).once('value').then((snapshot) => {
+                const room = snapshot.val();
+                if (!room) return alert('Комната не найдена!');
+                if (room.status !== 'waiting') return alert('Игра уже идет или закончилась!');
+                if (room.teams.includes(name)) return alert('Имя занято!');
+                if (room.teams.length >= MAX_TEAMS) return alert('Комната полна!');
+
+                myRoomId = code;
+                myTeamName = name;
+                isCreator = false;
+
+                room.teams.push(name);
+                db.ref('rooms/' + code).update({ teams: room.teams }).then(() => {
+                    goToScreen('screen-lobby-wait');
+                    setupRoomListener(code);
+                });
+            });
+        }
+
+        function leaveRoom() {
+            if (myRoomId && myTeamName) {
+                db.ref('rooms/' + myRoomId).once('value').then(snapshot => {
+                    const room = snapshot.val();
+                    if (room && room.teams) {
+                        room.teams = room.teams.filter(t => t !== myTeamName);
+                        if (isCreator) {
+                            db.ref('rooms/' + myRoomId).remove();
+                        } else {
+                            db.ref('rooms/' + myRoomId).update({ teams: room.teams });
+                        }
+                    }
+                });
+            }
+            location.reload();
+        }
+
+        function setupRoomListener(code) {
+            document.getElementById('lobby-room-code').textContent = code;
+            
+            roomListener = db.ref('rooms/' + code).on('value', (snapshot) => {
+                const room = snapshot.val();
+                if (!room) return;
+
+                // Update Lobby Grid
+                const grid = document.getElementById('teams-grid');
+                grid.innerHTML = '';
+                for (let i = 0; i < MAX_TEAMS; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'team-slot';
+                    if (i < room.teams.length) {
+                        slot.classList.add('filled');
+                        slot.textContent = room.teams[i];
+                        if (room.teams[i] === room.creator) slot.classList.add('creator');
+                        if (room.teams[i] === myTeamName) slot.style.border = "2px solid #fff";
+                    } else {
+                        slot.textContent = `Пусто (${i+1})`;
+                        slot.style.opacity = "0.3";
+                    }
+                    grid.appendChild(slot);
+                }
+
+                // Check Status
+                if (room.status === 'playing') {
+                    startGameClientSide();
+                }
+            });
+        }
+
+        function startGame() {
+            db.ref('rooms/' + myRoomId).update({ status: 'playing', currentQuestion: 0 });
+        }
+
+        function startGameClientSide() {
+            if (roomListener) db.ref('rooms/' + myRoomId).off('value', roomListener);
+            
+            document.getElementById('creator-controls').classList.add('hidden');
+            document.getElementById('player-controls').classList.add('hidden');
+            
+            myScore = 0;
+            currentQIndex = 0;
+            document.getElementById('game-team').textContent = myTeamName;
+            document.getElementById('game-score').textContent = '0';
+            
+            goToScreen('screen-game');
+            setupGameListener();
+            loadQuestionUI(questions[0]);
+        }
+
+        function setupGameListener() {
+            gameListener = db.ref('rooms/' + myRoomId).on('value', (snapshot) => {
+                const room = snapshot.val();
+                if (!room || room.status !== 'playing') return;
+
+                const qIndex = room.currentQuestion;
+                
+                if (qIndex >= questions.length) {
+                    finishGame();
+                    return;
+                }
+
+                // Если номер вопроса изменился - загружаем новый
+                if (qIndex !== currentQIndex) {
+                    currentQIndex = qIndex;
+                    loadQuestionUI(questions[qIndex]);
+                }
+            });
+        }
+
+        function loadQuestionUI(qData) {
+            document.getElementById('question-text').textContent = qData.q;
+            document.getElementById('wait-message').classList.add('hidden');
+            
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            // Перемешиваем ответы
+            let answers = qData.a.map((text, idx) => ({ text, isCorrect: idx === qData.c }));
+            answers.sort(() => Math.random() - 0.5);
+
+            answers.forEach(ans => {
+                const btn = document.createElement('button');
+                btn.textContent = ans.text;
+                btn.onclick = () => {
+                    const allBtns = document.querySelectorAll('.options button');
+                    allBtns.forEach(b => b.disabled = true);
+
+                    if (ans.isCorrect) {
+                        btn.classList.add('correct');
+                        myScore++;
+                        document.getElementById('game-score').textContent = myScore;
+                    } else {
+                        btn.classList.add('wrong');
+                        // Подсвечиваем правильный ответ
+                        allBtns.forEach(b => {
+                            if (b.textContent === qData.a[qData.c]) {
+                                b.classList.add('correct');
+                            }
+                        });
+                    }
+                    
+                    document.getElementById('wait-message').classList.remove('hidden');
+                    document.getElementById('wait-message').textContent = "Ответ записан!";
+
+                    // Создатель автоматически продвигает игру вперед
+                    if (isCreator) {
+                        setTimeout(() => {
+                            db.ref('rooms/' + myRoomId).transaction(currentData => {
+                                if (currentData && currentData.status === 'playing') {
+                                    return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
+                                }
+                                return currentData;
+                            });
+                        }, 2500);
+                    } else {
+                        document.getElementById('wait-message').textContent = "Ждем перехода к следующему вопросу...";
+                    }
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function finishGame() {
+            if (gameListener) db.ref('rooms/' + myRoomId).off('value', gameListener);
+            goToScreen('screen-results');
+            document.getElementById('final-score').textContent = `${myScore} / ${questions.length}`;
+            
+            const percent = (myScore / questions.length) * 100;
+            let msg = "";
+            if (percent === 100) msg = "🏆 Легенда галактики!";
+            else if (percent > 80) msg = "🚀 Отличный пилот!";
+            else if (percent > 50) msg = "⭐ Неплохой результат";
+            else msg = "🌑 Нужно подучить теорию";
+            
+            document.getElementById('result-text').textContent = msg;
+        }
+    </script>
+</body>
+</html>
