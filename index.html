@@ -87,6 +87,8 @@
         .btn-secondary { background: linear-gradient(45deg, #ff00ff, #8000ff); box-shadow: 0 0 20px rgba(255, 0, 255, 0.4); }
         .btn-start { background: linear-gradient(45deg, #00ff00, #008000); color: #000; width: 100%; margin-top: 20px; font-size: 1.2rem; }
         .btn-start:disabled { background: linear-gradient(45deg, #555, #333); color: #888; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-next { background: linear-gradient(45deg, #ffaa00, #ff6600); color: #000; width: 100%; margin-top: 20px; font-size: 1.1rem; animation: pulseBtn 2s infinite; }
+        @keyframes pulseBtn { 0%, 100% { box-shadow: 0 0 20px rgba(255, 170, 0, 0.4); } 50% { box-shadow: 0 0 40px rgba(255, 170, 0, 0.8); } }
         .btn-back { background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 14px; padding: 10px 25px; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
 
@@ -179,6 +181,7 @@
         
         .options button.correct { background: rgba(0, 255, 0, 0.3) !important; border-color: #00ff00 !important; box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); }
         .options button.wrong { background: rgba(255, 0, 0, 0.3) !important; border-color: #ff0000 !important; opacity: 0.6; }
+        .options button:disabled { opacity: 0.7; cursor: not-allowed; }
 
         .hidden { display: none !important; }
         .loading-spinner {
@@ -249,6 +252,16 @@
             animation: bounce 1s ease infinite;
         }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        
+        .status-message {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            padding: 10px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #a0ffff;
+        }
     </style>
 </head>
 <body>
@@ -317,7 +330,19 @@
             </div>
             <div class="question-box" id="question-text">Загрузка...</div>
             <div class="options" id="options-container"></div>
-            <p id="wait-message" class="hidden" style="color: #ffff00; margin-top: 20px; font-size: 14px;">Ожидание перехода к следующему вопросу...</p>
+            
+            <!-- Сообщение после ответа -->
+            <div id="answer-status" class="hidden">
+                <div class="status-message" id="status-text">Ответ принят!</div>
+            </div>
+            
+            <!-- Кнопка следующего вопроса ТОЛЬКО для создателя -->
+            <button id="btn-next-question" class="btn btn-next hidden" onclick="nextQuestion()">➡️ СЛЕДУЮЩИЙ ВОПРОС</button>
+            
+            <!-- Сообщение для обычных игроков -->
+            <p id="wait-host-message" class="hidden" style="color: #ffff00; margin-top: 15px; font-size: 14px;">
+                ⏳ Ждём, когда ведущий перейдёт к следующему вопросу...
+            </p>
         </div>
 
         <!-- 6. LEADERBOARD / RESULTS -->
@@ -327,7 +352,6 @@
             <p class="subtitle" id="results-subtitle">Таблица лидеров</p>
             
             <div class="leaderboard" id="leaderboard-container">
-                <!-- Leaderboard items will be inserted here -->
                 <div class="loading-spinner"></div>
             </div>
             
@@ -357,7 +381,6 @@
         };
         // ==========================================
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -443,6 +466,7 @@
         let scoresListener = null;
         let currentQIndex = 0;
         let allTeamsScores = {};
+        let hasAnswered = false; // Did current player answer this question?
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -491,7 +515,6 @@
                 isCreator = false;
 
                 room.teams.push(name);
-                // Initialize score for new team
                 const updates = {
                     teams: room.teams,
                     [`scores/${name}`]: 0
@@ -531,7 +554,6 @@
                 const room = snapshot.val();
                 if (!room) return;
 
-                // Update Lobby Grid with scores
                 const grid = document.getElementById('teams-grid');
                 grid.innerHTML = '';
                 for (let i = 0; i < MAX_TEAMS; i++) {
@@ -550,13 +572,11 @@
                     grid.appendChild(slot);
                 }
 
-                // Update start button state for creator
                 const startBtn = document.getElementById('btn-start-game');
                 if (isCreator && startBtn) {
                     startBtn.disabled = room.teams.length < 1;
                 }
 
-                // Check Status
                 if (room.status === 'playing') {
                     startGameClientSide();
                 }
@@ -575,6 +595,7 @@
             
             myScore = 0;
             currentQIndex = 0;
+            hasAnswered = false;
             document.getElementById('game-team').textContent = myTeamName;
             document.getElementById('game-score').textContent = '0';
             document.getElementById('game-total-questions').textContent = questions.length;
@@ -597,9 +618,21 @@
                     return;
                 }
 
+                // Если вопрос изменился в базе - загружаем новый
+                // СБРОС состояния для нового вопроса
                 if (qIndex !== currentQIndex) {
                     currentQIndex = qIndex;
+                    hasAnswered = false; // Сбрасываем флаг ответа для нового вопроса
+                    
+                    // Скрываем старые сообщения и кнопки
+                    document.getElementById('answer-status').classList.add('hidden');
+                    document.getElementById('btn-next-question').classList.add('hidden');
+                    document.getElementById('wait-host-message').classList.add('hidden');
+                    
+                    // Обновляем номер вопроса
                     document.getElementById('game-question-num').textContent = qIndex + 1;
+                    
+                    // Загружаем новый вопрос
                     loadQuestionUI(questions[qIndex]);
                 }
             });
@@ -608,7 +641,6 @@
         function setupScoresListener() {
             scoresListener = db.ref('rooms/' + myRoomId + '/scores').on('value', (snapshot) => {
                 allTeamsScores = snapshot.val() || {};
-                // Update local score display
                 if (allTeamsScores[myTeamName] !== undefined) {
                     myScore = allTeamsScores[myTeamName];
                     document.getElementById('game-score').textContent = myScore;
@@ -618,7 +650,6 @@
 
         function loadQuestionUI(qData) {
             document.getElementById('question-text').textContent = qData.q;
-            document.getElementById('wait-message').classList.add('hidden');
             
             const container = document.getElementById('options-container');
             container.innerHTML = '';
@@ -629,43 +660,71 @@
             answers.forEach(ans => {
                 const btn = document.createElement('button');
                 btn.textContent = ans.text;
-                btn.onclick = () => {
-                    const allBtns = document.querySelectorAll('.options button');
-                    allBtns.forEach(b => b.disabled = true);
-
-                    if (ans.isCorrect) {
-                        btn.classList.add('correct');
-                        // Update score in Firebase
-                        db.ref('rooms/' + myRoomId + '/scores/' + myTeamName).transaction(currentScore => {
-                            return (currentScore || 0) + 1;
-                        });
-                    } else {
-                        btn.classList.add('wrong');
-                        allBtns.forEach(b => {
-                            if (b.textContent === qData.a[qData.c]) {
-                                b.classList.add('correct');
-                            }
-                        });
-                    }
-                    
-                    document.getElementById('wait-message').classList.remove('hidden');
-                    document.getElementById('wait-message').textContent = "Ответ записан!";
-
-                    // Creator advances the game
-                    if (isCreator) {
-                        setTimeout(() => {
-                            db.ref('rooms/' + myRoomId).transaction(currentData => {
-                                if (currentData && currentData.status === 'playing') {
-                                    return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
-                                }
-                                return currentData;
-                            });
-                        }, 2500);
-                    } else {
-                        document.getElementById('wait-message').textContent = "Ждем перехода к следующему вопросу...";
-                    }
-                };
+                btn.onclick = () => handleAnswer(btn, ans.isCorrect, qData.a[qData.c]);
                 container.appendChild(btn);
+            });
+        }
+
+        function handleAnswer(btn, isCorrect, correctAnswerText) {
+            // Если уже ответил - игнорируем
+            if (hasAnswered) return;
+            hasAnswered = true;
+            
+            // Блокируем все кнопки
+            const allBtns = document.querySelectorAll('.options button');
+            allBtns.forEach(b => b.disabled = true);
+
+            if (isCorrect) {
+                btn.classList.add('correct');
+                // Обновляем счёт в Firebase
+                db.ref('rooms/' + myRoomId + '/scores/' + myTeamName).transaction(currentScore => {
+                    return (currentScore || 0) + 1;
+                });
+            } else {
+                btn.classList.add('wrong');
+                // Подсвечиваем правильный ответ
+                allBtns.forEach(b => {
+                    if (b.textContent === correctAnswerText) {
+                        b.classList.add('correct');
+                    }
+                });
+            }
+            
+            // Показываем статус
+            const statusDiv = document.getElementById('answer-status');
+            const statusText = document.getElementById('status-text');
+            statusDiv.classList.remove('hidden');
+            
+            if (isCorrect) {
+                statusText.textContent = "✅ Правильно! +1 очко";
+                statusText.style.color = "#00ff00";
+            } else {
+                statusText.textContent = "❌ Ошибка! Правильный ответ подсвечен";
+                statusText.style.color = "#ff6666";
+            }
+
+            // Показываем кнопку/сообщение в зависимости от роли
+            const nextBtn = document.getElementById('btn-next-question');
+            const waitMsg = document.getElementById('wait-host-message');
+            
+            if (isCreator) {
+                // Создатель видит кнопку "Следующий вопрос"
+                nextBtn.classList.remove('hidden');
+                waitMsg.classList.add('hidden');
+            } else {
+                // Обычные игроки ждут
+                nextBtn.classList.add('hidden');
+                waitMsg.classList.remove('hidden');
+            }
+        }
+
+        // Функция для перехода к следующему вопросу (только для создателя)
+        function nextQuestion() {
+            db.ref('rooms/' + myRoomId).transaction(currentData => {
+                if (currentData && currentData.status === 'playing') {
+                    return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
+                }
+                return currentData;
             });
         }
 
@@ -680,9 +739,8 @@
         function showLeaderboard() {
             const container = document.getElementById('leaderboard-container');
             
-            // Convert scores object to array and sort
             const sortedTeams = Object.entries(allTeamsScores)
-                .sort((a, b) => b[1] - a[1]) // Sort by score descending
+                .sort((a, b) => b[1] - a[1])
                 .map(([name, score], index) => ({ rank: index + 1, name, score }));
 
             container.innerHTML = '';
@@ -706,7 +764,6 @@
                 container.appendChild(item);
             });
 
-            // Show personal result
             const myRank = sortedTeams.findIndex(t => t.name === myTeamName) + 1;
             const myFinalScore = allTeamsScores[myTeamName] || 0;
             const total = questions.length;
