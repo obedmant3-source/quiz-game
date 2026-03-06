@@ -626,6 +626,7 @@
         let hasAnswered = false;
         let totalTeamsCount = 0;
         let localTimerInterval = null;
+        let lastProcessedQuestion = -1; // 🔥 ЗАЩИТА ОТ ДВОЙНОГО ПЕРЕКЛЮЧЕНИЯ
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -650,7 +651,6 @@
                 status: 'waiting',
                 currentQuestion: 0,
                 scores: { [name]: 0 },
-                timerStart: null,
                 currentQuestionStartTime: null
             }).then(() => {
                 goToScreen('screen-lobby-wait');
@@ -792,7 +792,6 @@
             db.ref('rooms/' + myRoomId).update({ 
                 status: 'playing', 
                 currentQuestion: 0,
-                timerStart: now,
                 currentQuestionStartTime: now
             });
         }
@@ -806,6 +805,7 @@
             myScore = 0;
             currentQIndex = 0;
             hasAnswered = false;
+            lastProcessedQuestion = -1; // 🔥 СБРОС ЗАЩИТЫ
             document.getElementById('game-team').textContent = myTeamName;
             document.getElementById('game-score').textContent = '0';
             document.getElementById('game-total-questions').textContent = questions.length;
@@ -829,7 +829,9 @@
                     return;
                 }
 
-                if (qIndex !== currentQIndex) {
+                // 🔥 ЗАЩИТА: Обрабатываем вопрос только один раз
+                if (qIndex !== currentQIndex && qIndex !== lastProcessedQuestion) {
+                    lastProcessedQuestion = qIndex;
                     currentQIndex = qIndex;
                     hasAnswered = false;
                     
@@ -900,25 +902,34 @@
                     timerProgress.classList.add('danger');
                 }
                 
-                // 🔥 Время вышло - переходим к следующему вопросу
+                // 🔥 ВРЕМЯ ВЫШЛО - ТОЛЬКО СОЗДАТЕЛЬ ПЕРЕКЛЮЧАЕТ ВОПРОС
                 if (remaining === 0) {
                     document.getElementById('time-up').classList.remove('hidden');
                     document.getElementById('waiting-all').classList.add('hidden');
                     
-                    // Небольшая задержка перед следующим вопросом
-                    setTimeout(() => {
-                        db.ref('rooms/' + myRoomId).transaction(currentData => {
-                            if (currentData && currentData.status === 'playing') {
-                                const now = Date.now();
-                                return { 
-                                    ...currentData, 
-                                    currentQuestion: currentData.currentQuestion + 1,
-                                    currentQuestionStartTime: now
-                                };
+                    // 🔥 ВАЖНО: Только создатель переключает вопрос!
+                    if (isCreator) {
+                        // 🔥 ЗАЩИТА: Проверяем, не переключили ли уже вопрос
+                        db.ref('rooms/' + myRoomId).once('value').then(snapshot => {
+                            const room = snapshot.val();
+                            if (room && room.currentQuestion === currentQIndex) {
+                                // Вопрос ещё не переключился, можем переключить
+                                setTimeout(() => {
+                                    db.ref('rooms/' + myRoomId).transaction(currentData => {
+                                        if (currentData && currentData.status === 'playing' && currentData.currentQuestion === currentQIndex) {
+                                            const now = Date.now();
+                                            return { 
+                                                ...currentData, 
+                                                currentQuestion: currentData.currentQuestion + 1,
+                                                currentQuestionStartTime: now
+                                            };
+                                        }
+                                        return currentData; // Кто-то уже переключил
+                                    });
+                                }, 2000);
                             }
-                            return currentData;
                         });
-                    }, 2000);
+                    }
                 }
             };
             
