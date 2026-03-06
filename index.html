@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Космическая Викторина: Онлайн</title>
+    <title>🚀 Космическая Викторина: Авто-режим</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;700&display=swap');
         
@@ -101,15 +101,6 @@
             transform: none; 
             box-shadow: none; 
             animation: none;
-        }
-        
-        .btn-next { 
-            background: linear-gradient(45deg, #ffaa00, #ff6600); 
-            color: #000; 
-            width: 100%; 
-            margin-top: 20px; 
-            font-size: 1.1rem; 
-            animation: pulseBtn 2s infinite; 
         }
         
         @keyframes pulseBtn { 
@@ -216,8 +207,34 @@
         @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
         /* --- GAME UI --- */
-        .game-info { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 10px; font-size: 14px; }
+        .game-info { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 20px; 
+            padding: 15px; 
+            background: rgba(0,0,0,0.3); 
+            border-radius: 15px; 
+            font-size: 14px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
         .info-value { color: #00ffff; font-family: 'Orbitron'; font-weight: bold; }
+        
+        .progress-indicator {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            border-radius: 20px;
+            padding: 8px 15px;
+            font-size: 13px;
+            color: #ffff00;
+            font-family: 'Orbitron';
+            animation: pulseProgress 1.5s infinite;
+        }
+        @keyframes pulseProgress { 
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 0, 0.3); } 
+            50% { box-shadow: 0 0 20px rgba(255, 255, 0, 0.6); } 
+        }
         
         .question-box { font-size: 1.3rem; margin: 20px 0; color: #fff; min-height: 70px; display: flex; align-items: center; justify-content: center; }
         
@@ -331,6 +348,19 @@
             margin-bottom: 10px;
             box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
         }
+
+        .waiting-message {
+            background: rgba(255, 255, 0, 0.1);
+            border: 1px solid #ffff00;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 15px;
+            color: #ffff00;
+            font-weight: bold;
+            animation: pulseWait 1s infinite;
+        }
+        @keyframes pulseWait { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     </style>
 </head>
 <body>
@@ -398,9 +428,10 @@
         <!-- 5. GAME -->
         <div id="screen-game" class="screen">
             <div class="game-info">
-                <div>Команда: <span class="info-value" id="game-team">-</span></div>
-                <div>Вопрос: <span class="info-value" id="game-question-num">1</span>/<span id="game-total-questions">30</span></div>
-                <div>Счёт: <span class="info-value" id="game-score">0</span></div>
+                <div>📍 <span class="info-value" id="game-team">-</span></div>
+                <div>❓ <span class="info-value" id="game-question-num">1</span>/<span id="game-total-questions">30</span></div>
+                <div>⭐ <span class="info-value" id="game-score">0</span></div>
+                <div class="progress-indicator" id="progress-indicator">⏳ 0/0</div>
             </div>
             <div class="question-box" id="question-text">Загрузка...</div>
             <div class="options" id="options-container"></div>
@@ -409,12 +440,13 @@
                 <div class="status-message" id="status-text">Ответ принят!</div>
             </div>
             
-            <!-- Кнопка следующего вопроса ТОЛЬКО для создателя -->
-            <button id="btn-next-question" class="btn btn-next hidden" onclick="nextQuestion()">➡️ СЛЕДУЮЩИЙ ВОПРОС</button>
-            
-            <p id="wait-host-message" class="hidden" style="color: #ffff00; margin-top: 15px; font-size: 14px;">
-                ⏳ Ждём, когда создатель перейдёт к следующему вопросу...
-            </p>
+            <!-- Сообщение ожидания для всех -->
+            <div id="waiting-all" class="hidden">
+                <div class="waiting-message">
+                    ⏳ Ждём остальные команды...<br>
+                    <span id="waiting-count" style="font-size: 18px;">0 из 0 ответили</span>
+                </div>
+            </div>
         </div>
 
         <!-- 6. LEADERBOARD / RESULTS -->
@@ -516,9 +548,11 @@
         let roomListener = null;
         let gameListener = null;
         let scoresListener = null;
+        let answersListener = null;
         let currentQIndex = 0;
         let allTeamsScores = {};
         let hasAnswered = false;
+        let totalTeamsCount = 0;
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -537,7 +571,6 @@
 
             document.getElementById('generated-code').textContent = code;
 
-            // Создаем комнату. Создатель сохраняется в creatorName
             db.ref('rooms/' + code).set({
                 creatorName: name,
                 teams: [name],
@@ -585,7 +618,6 @@
                     room.teams = room.teams.filter(t => t !== myTeamName);
                     if (room.scores) delete room.scores[myTeamName];
                     
-                    // Если ушел создатель - удаляем комнату
                     if (room.creatorName === myTeamName) {
                         return null;
                     } else if (room.teams.length === 0) {
@@ -604,10 +636,9 @@
                 const room = snapshot.val();
                 if (!room) return;
 
-                // Проверяем, являюсь ли я создателем
                 isCreator = (room.creatorName === myTeamName);
+                totalTeamsCount = room.teams.length;
 
-                // Рендерим сетку лобби с номерами 1-8
                 const grid = document.getElementById('teams-grid');
                 grid.innerHTML = '';
                 
@@ -615,7 +646,6 @@
                     const slot = document.createElement('div');
                     slot.className = 'team-slot';
                     
-                    // Номер слота (1-8)
                     const numberBadge = document.createElement('div');
                     numberBadge.className = 'slot-number';
                     numberBadge.textContent = i + 1;
@@ -630,7 +660,6 @@
                         nameDiv.textContent = teamName;
                         slot.appendChild(nameDiv);
 
-                        // Если это создатель
                         if (teamName === room.creatorName) {
                             slot.classList.add('creator');
                             const creatorBadge = document.createElement('div');
@@ -639,7 +668,6 @@
                             slot.appendChild(creatorBadge);
                         }
 
-                        // Очки (если игра идет)
                         if (room.scores && room.scores[teamName] !== undefined) {
                             const scoreBadge = document.createElement('div');
                             scoreBadge.className = 'score-badge';
@@ -659,7 +687,6 @@
                     grid.appendChild(slot);
                 }
 
-                // Показываем кнопку старта ТОЛЬКО создателю
                 const creatorControls = document.getElementById('creator-controls');
                 const playerControls = document.getElementById('player-controls');
                 const startBtn = document.getElementById('btn-start-game');
@@ -682,7 +709,7 @@
         // 🔒 ТОЛЬКО СОЗДАТЕЛЬ МОЖЕТ НАЧАТЬ ИГРУ
         function startGame() {
             if (!isCreator) {
-                alert('⛔ Только создатель комнаты может начать игру!');
+                alert('⛔ Только создатель комнаты (с короной) может начать игру!');
                 return;
             }
             db.ref('rooms/' + myRoomId).update({ status: 'playing', currentQuestion: 0 });
@@ -724,8 +751,7 @@
                     hasAnswered = false;
                     
                     document.getElementById('answer-status').classList.add('hidden');
-                    document.getElementById('btn-next-question').classList.add('hidden');
-                    document.getElementById('wait-host-message').classList.add('hidden');
+                    document.getElementById('waiting-all').classList.add('hidden');
                     
                     document.getElementById('game-question-num').textContent = qIndex + 1;
                     
@@ -746,6 +772,7 @@
 
         function loadQuestionUI(qData) {
             document.getElementById('question-text').textContent = qData.q;
+            document.getElementById('progress-indicator').textContent = `⏳ 0/${totalTeamsCount}`;
             
             const container = document.getElementById('options-container');
             container.innerHTML = '';
@@ -794,30 +821,39 @@
                 statusText.style.color = "#ff6666";
             }
 
-            const nextBtn = document.getElementById('btn-next-question');
-            const waitMsg = document.getElementById('wait-host-message');
-            
-            // 🔒 КНОПКУ СЛЕДУЮЩЕГО ВОПРОСА ТОЛЬКО СОЗДАТЕЛЮ
-            if (isCreator) {
-                nextBtn.classList.remove('hidden');
-                waitMsg.classList.add('hidden');
-            } else {
-                nextBtn.classList.add('hidden');
-                waitMsg.classList.remove('hidden');
-            }
-        }
+            // 🔥 ЗАПИСЫВАЕМ ОТВЕТ В БАЗУ
+            db.ref(`rooms/${myRoomId}/answers/${currentQIndex}/${myTeamName}`).set(true);
 
-        // 🔒 ТОЛЬКО СОЗДАТЕЛЬ МОЖЕТ ПЕРЕКЛЮЧИТЬ ВОПРОС
-        function nextQuestion() {
-            if (!isCreator) {
-                alert('⛔ Только создатель комнаты может перейти к следующему вопросу!');
-                return;
-            }
-            db.ref('rooms/' + myRoomId).transaction(currentData => {
-                if (currentData && currentData.status === 'playing') {
-                    return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
+            // 🔥 СЛУШАЕМ ПРОГРЕСС ОТВЕТОВ
+            const answersRef = db.ref(`rooms/${myRoomId}/answers/${currentQIndex}`);
+            
+            answersRef.on('value', (snapshot) => {
+                const answeredTeams = snapshot.val() || {};
+                const count = Object.keys(answeredTeams).length;
+                
+                // Обновляем индикатор прогресса рядом со счётом
+                document.getElementById('progress-indicator').textContent = `⏳ ${count}/${totalTeamsCount}`;
+                
+                // Показываем сообщение ожидания
+                const waitingDiv = document.getElementById('waiting-all');
+                const waitingCount = document.getElementById('waiting-count');
+                waitingDiv.classList.remove('hidden');
+                waitingCount.textContent = `${count} из ${totalTeamsCount} команд ответили`;
+
+                // 🔥 ЕСЛИ ВСЕ ОТВЕТИЛИ -> АВТОМАТИЧЕСКИ СЛЕДУЮЩИЙ ВОПРОС
+                if (count >= totalTeamsCount) {
+                    waitingCount.textContent = "✅ Все ответили! Загрузка следующего вопроса...";
+                    waitingCount.style.color = "#00ff00";
+                    
+                    setTimeout(() => {
+                        db.ref('rooms/' + myRoomId).transaction(currentData => {
+                            if (currentData && currentData.status === 'playing') {
+                                return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
+                            }
+                            return currentData;
+                        });
+                    }, 2000);
                 }
-                return currentData;
             });
         }
 
