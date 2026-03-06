@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Космическая Викторина: Таймер</title>
+    <title>🚀 Космическая Викторина</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;700&display=swap');
         
@@ -228,29 +228,22 @@
             font-size: 1.5rem;
             font-weight: 900;
             color: #ff6666;
-            animation: timerPulse 1s infinite;
         }
         .timer-container.warning {
             background: rgba(255, 200, 0, 0.15);
             border-color: #ffcc00;
             color: #ffcc00;
-            animation: timerPulse 0.5s infinite;
         }
         .timer-container.danger {
             background: rgba(255, 0, 0, 0.2);
             border-color: #ff0000;
             color: #ff0000;
-            animation: timerPulse 0.3s infinite;
         }
         .timer-container.finished {
             background: rgba(100, 100, 100, 0.15);
             border-color: #888;
             color: #888;
             animation: none;
-        }
-        @keyframes timerPulse { 
-            0%, 100% { transform: scale(1); box-shadow: 0 0 10px currentColor; } 
-            50% { transform: scale(1.05); box-shadow: 0 0 20px currentColor; } 
         }
         .timer-icon { font-size: 1.3rem; }
         
@@ -387,11 +380,6 @@
             color: #ff6666;
             font-weight: bold;
             font-family: 'Orbitron';
-            animation: flashRed 0.5s infinite;
-        }
-        @keyframes flashRed { 
-            0%, 100% { background: rgba(255, 0, 0, 0.2); } 
-            50% { background: rgba(255, 0, 0, 0.4); } 
         }
 
         .progress-bar-container {
@@ -593,7 +581,7 @@
         let allTeamsScores = {};
         let hasAnswered = false;
         let totalTeamsCount = 0;
-        let timerTimeout = null; // 🔥 ИСПОЛЬЗУЕМ setTimeout ВМЕСТО setInterval
+        let creatorTimerInterval = null; // 🔥 ТОЛЬКО У СОЗДАТЕЛЯ
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -617,7 +605,7 @@
                 status: 'waiting',
                 currentQuestion: 0,
                 scores: { [name]: 0 },
-                currentQuestionStartTime: null
+                questionStartTime: null
             }).then(() => {
                 goToScreen('screen-lobby-wait');
                 setupRoomListener(code);
@@ -663,7 +651,7 @@
                     return room;
                 });
             }
-            if (timerTimeout) clearTimeout(timerTimeout);
+            if (creatorTimerInterval) clearInterval(creatorTimerInterval);
             location.reload();
         }
 
@@ -753,7 +741,7 @@
             db.ref('rooms/' + myRoomId).update({ 
                 status: 'playing', 
                 currentQuestion: 0,
-                currentQuestionStartTime: now
+                questionStartTime: now
             });
         }
 
@@ -773,6 +761,12 @@
             goToScreen('screen-game');
             setupGameListener();
             setupScoresListener();
+            
+            // 🔥 ТАЙМЕР ЗАПУСКАЕТСЯ ТОЛЬКО У СОЗДАТЕЛЯ
+            if (isCreator) {
+                startCreatorTimer();
+            }
+            
             loadQuestionUI(questions[0]);
         }
 
@@ -792,22 +786,14 @@
                     currentQIndex = qIndex;
                     hasAnswered = false;
                     
-                    // 🔥 ОТМЕНЯЕМ ПРЕДЫДУЩИЙ ТАЙМЕР
-                    if (timerTimeout) {
-                        clearTimeout(timerTimeout);
-                        timerTimeout = null;
-                    }
-                    
                     document.getElementById('answer-status').classList.add('hidden');
                     document.getElementById('waiting-all').classList.add('hidden');
                     document.getElementById('time-up').classList.add('hidden');
                     
                     document.getElementById('game-question-num').textContent = qIndex + 1;
                     
-                    // 🔥 ЗАПУСКАЕМ НОВЫЙ ТАЙМЕР
-                    if (room.currentQuestionStartTime) {
-                        startTimer(room.currentQuestionStartTime);
-                    }
+                    // 🔥 СБРОС ТАЙМЕРА ДЛЯ ВСЕХ
+                    resetTimerDisplay();
                     
                     loadQuestionUI(questions[qIndex]);
                 }
@@ -824,71 +810,89 @@
             });
         }
 
-        // 🔥 НОВАЯ ЛОГИКА ТАЙМЕРА - ОДИН ЗАПУСК
-        function startTimer(startTime) {
+        // 🔥 ТАЙМЕР ТОЛЬКО У СОЗДАТЕЛЯ
+        function startCreatorTimer() {
+            if (creatorTimerInterval) clearInterval(creatorTimerInterval);
+            
+            let timeLeft = QUESTION_TIME_SECONDS;
             const timerDisplay = document.getElementById('timer-display');
             const timerValue = document.getElementById('timer-value');
             const timerProgress = document.getElementById('timer-progress');
             
-            const updateTimer = () => {
-                const now = Date.now();
-                const elapsed = Math.floor((now - startTime) / 1000);
-                const remaining = Math.max(0, QUESTION_TIME_SECONDS - elapsed);
+            creatorTimerInterval = setInterval(() => {
+                timeLeft--;
                 
-                timerValue.textContent = remaining;
+                timerValue.textContent = Math.max(0, timeLeft);
                 
-                const progressPercent = (remaining / QUESTION_TIME_SECONDS) * 100;
+                const progressPercent = (timeLeft / QUESTION_TIME_SECONDS) * 100;
                 timerProgress.style.width = progressPercent + '%';
                 
                 timerDisplay.classList.remove('warning', 'danger', 'finished');
                 timerProgress.classList.remove('warning', 'danger');
                 
-                if (remaining <= 10 && remaining > 5) {
+                if (timeLeft <= 10 && timeLeft > 5) {
                     timerDisplay.classList.add('warning');
                     timerProgress.classList.add('warning');
-                } else if (remaining <= 5 && remaining > 0) {
+                } else if (timeLeft <= 5 && timeLeft > 0) {
                     timerDisplay.classList.add('danger');
                     timerProgress.classList.add('danger');
-                } else if (remaining === 0) {
+                } else if (timeLeft <= 0) {
                     timerDisplay.classList.add('finished');
                 }
                 
-                // 🔥 ЕСЛИ ЕЩЁ ЕСТЬ ВРЕМЯ - ПРОДОЛЖАЕМ
-                if (remaining > 0) {
-                    timerTimeout = setTimeout(updateTimer, 1000);
-                } else {
-                    // 🔥 ВРЕМЯ ВЫШЛО - ТОЛЬКО СОЗДАТЕЛЬ ПЕРЕКЛЮЧАЕТ
-                    if (isCreator) {
-                        document.getElementById('time-up').classList.remove('hidden');
-                        document.getElementById('waiting-all').classList.add('hidden');
-                        
-                        // 🔥 ОДИН ЗАПУСК ПЕРЕХОДА - БЕЗ ЦИКЛОВ
-                        timerTimeout = setTimeout(() => {
-                            nextQuestion();
-                        }, 2000);
-                    } else {
-                        document.getElementById('waiting-all').classList.remove('hidden');
-                    }
+                // 🔥 КОГДА ВРЕМЯ ВЫШЛО - ПЕРЕКЛЮЧАЕМ ВОПРОС
+                if (timeLeft <= 0) {
+                    clearInterval(creatorTimerInterval);
+                    creatorTimerInterval = null;
+                    
+                    document.getElementById('time-up').classList.remove('hidden');
+                    document.getElementById('waiting-all').classList.add('hidden');
+                    
+                    // 🔥 ПЕРЕКЛЮЧЕНИЕ ЧЕРЕЗ 2 СЕКУНДЫ
+                    setTimeout(() => {
+                        nextQuestion();
+                    }, 2000);
                 }
-            };
-            
-            updateTimer();
+            }, 1000);
         }
 
-        // 🔥 ОТДЕЛЬНАЯ ФУНКЦИЯ ПЕРЕХОДА
+        // 🔥 СБРОС ОТОБРАЖЕНИЯ ТАЙМЕРА ДЛЯ ВСЕХ
+        function resetTimerDisplay() {
+            const timerDisplay = document.getElementById('timer-display');
+            const timerValue = document.getElementById('timer-value');
+            const timerProgress = document.getElementById('timer-progress');
+            
+            timerValue.textContent = QUESTION_TIME_SECONDS;
+            timerProgress.style.width = '100%';
+            timerDisplay.classList.remove('warning', 'danger', 'finished');
+            timerProgress.classList.remove('warning', 'danger');
+            
+            // 🔥 ЕСЛИ НЕ СОЗДАТЕЛЬ - ПРОСТО ПОКАЗЫВАЕМ ТАЙМЕР БЕЗ ФУНКЦИОНАЛА
+            if (!isCreator) {
+                // Обычные игроки просто видят статичный таймер
+                timerValue.textContent = QUESTION_TIME_SECONDS;
+            }
+        }
+
+        // 🔥 ТОЛЬКО СОЗДАТЕЛЬ ПЕРЕКЛЮЧАЕТ ВОПРОС
         function nextQuestion() {
             if (!isCreator) return;
             
             db.ref('rooms/' + myRoomId).transaction(currentData => {
-                if (currentData && currentData.status === 'playing' && currentData.currentQuestion === currentQIndex) {
+                if (currentData && currentData.status === 'playing') {
                     const now = Date.now();
                     return { 
                         ...currentData, 
                         currentQuestion: currentData.currentQuestion + 1,
-                        currentQuestionStartTime: now
+                        questionStartTime: now
                     };
                 }
                 return currentData;
+            }).then(() => {
+                // 🔥 ЗАПУСКАЕМ НОВЫЙ ТАЙМЕР ДЛЯ СЛЕДУЮЩЕГО ВОПРОСА
+                setTimeout(() => {
+                    startCreatorTimer();
+                }, 100);
             });
         }
 
@@ -950,7 +954,7 @@
         function finishGame() {
             if (gameListener) db.ref('rooms/' + myRoomId).off('value', gameListener);
             if (scoresListener) db.ref('rooms/' + myRoomId + '/scores').off('value', scoresListener);
-            if (timerTimeout) clearTimeout(timerTimeout);
+            if (creatorTimerInterval) clearInterval(creatorTimerInterval);
             
             goToScreen('screen-results');
             showLeaderboard();
