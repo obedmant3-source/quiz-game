@@ -589,14 +589,11 @@
         let roomListener = null;
         let gameListener = null;
         let scoresListener = null;
-        let timerListener = null;
         let currentQIndex = 0;
         let allTeamsScores = {};
         let hasAnswered = false;
         let totalTeamsCount = 0;
-        let localTimerInterval = null;
-        let timerHasFinished = false; // 🔥 ФЛАГ: таймер закончился для текущего вопроса
-        let questionTransitionPending = false; // 🔥 ФЛАГ: переход уже запланирован
+        let timerTimeout = null; // 🔥 ИСПОЛЬЗУЕМ setTimeout ВМЕСТО setInterval
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -666,7 +663,7 @@
                     return room;
                 });
             }
-            if (localTimerInterval) clearInterval(localTimerInterval);
+            if (timerTimeout) clearTimeout(timerTimeout);
             location.reload();
         }
 
@@ -769,8 +766,6 @@
             myScore = 0;
             currentQIndex = 0;
             hasAnswered = false;
-            timerHasFinished = false;
-            questionTransitionPending = false;
             document.getElementById('game-team').textContent = myTeamName;
             document.getElementById('game-score').textContent = '0';
             document.getElementById('game-total-questions').textContent = questions.length;
@@ -778,7 +773,6 @@
             goToScreen('screen-game');
             setupGameListener();
             setupScoresListener();
-            setupTimerListener();
             loadQuestionUI(questions[0]);
         }
 
@@ -797,8 +791,12 @@
                 if (qIndex !== currentQIndex) {
                     currentQIndex = qIndex;
                     hasAnswered = false;
-                    timerHasFinished = false;
-                    questionTransitionPending = false;
+                    
+                    // 🔥 ОТМЕНЯЕМ ПРЕДЫДУЩИЙ ТАЙМЕР
+                    if (timerTimeout) {
+                        clearTimeout(timerTimeout);
+                        timerTimeout = null;
+                    }
                     
                     document.getElementById('answer-status').classList.add('hidden');
                     document.getElementById('waiting-all').classList.add('hidden');
@@ -806,8 +804,9 @@
                     
                     document.getElementById('game-question-num').textContent = qIndex + 1;
                     
+                    // 🔥 ЗАПУСКАЕМ НОВЫЙ ТАЙМЕР
                     if (room.currentQuestionStartTime) {
-                        startLocalTimer(room.currentQuestionStartTime);
+                        startTimer(room.currentQuestionStartTime);
                     }
                     
                     loadQuestionUI(questions[qIndex]);
@@ -825,31 +824,16 @@
             });
         }
 
-        function setupTimerListener() {
-            timerListener = db.ref('rooms/' + myRoomId).on('value', (snapshot) => {
-                const room = snapshot.val();
-                if (!room || !room.currentQuestionStartTime) return;
-                startLocalTimer(room.currentQuestionStartTime);
-            });
-        }
-
-        function startLocalTimer(startTime) {
-            // 🔥 ОЧИЩАЕМ ПРЕДЫДУЩИЙ ТАЙМЕР
-            if (localTimerInterval) {
-                clearInterval(localTimerInterval);
-                localTimerInterval = null;
-            }
-            
-            timerHasFinished = false;
+        // 🔥 НОВАЯ ЛОГИКА ТАЙМЕРА - ОДИН ЗАПУСК
+        function startTimer(startTime) {
+            const timerDisplay = document.getElementById('timer-display');
+            const timerValue = document.getElementById('timer-value');
+            const timerProgress = document.getElementById('timer-progress');
             
             const updateTimer = () => {
                 const now = Date.now();
                 const elapsed = Math.floor((now - startTime) / 1000);
                 const remaining = Math.max(0, QUESTION_TIME_SECONDS - elapsed);
-                
-                const timerDisplay = document.getElementById('timer-display');
-                const timerValue = document.getElementById('timer-value');
-                const timerProgress = document.getElementById('timer-progress');
                 
                 timerValue.textContent = remaining;
                 
@@ -869,36 +853,43 @@
                     timerDisplay.classList.add('finished');
                 }
                 
-                // 🔥 ВАЖНО: Проверяем, не закончился ли таймер уже
-                if (remaining === 0 && !timerHasFinished && !questionTransitionPending) {
-                    timerHasFinished = true;
-                    questionTransitionPending = true; // 🔥 БЛОКИРУЕМ повторный вызов
-                    
-                    document.getElementById('time-up').classList.remove('hidden');
-                    document.getElementById('waiting-all').classList.add('hidden');
-                    
-                    // 🔥 ТОЛЬКО СОЗДАТЕЛЬ ПЕРЕКЛЮЧАЕТ ВОПРОС
+                // 🔥 ЕСЛИ ЕЩЁ ЕСТЬ ВРЕМЯ - ПРОДОЛЖАЕМ
+                if (remaining > 0) {
+                    timerTimeout = setTimeout(updateTimer, 1000);
+                } else {
+                    // 🔥 ВРЕМЯ ВЫШЛО - ТОЛЬКО СОЗДАТЕЛЬ ПЕРЕКЛЮЧАЕТ
                     if (isCreator) {
-                        // 🔥 Ждём 2 секунды перед переходом
-                        setTimeout(() => {
-                            // 🔥 ПРОВЕРЯЕМ ещё раз перед переключением
-                            db.ref('rooms/' + myRoomId).once('value').then(snapshot => {
-                                const room = snapshot.val();
-                                if (room && room.currentQuestion === currentQIndex && room.status === 'playing') {
-                                    const newStartTime = Date.now();
-                                    db.ref('rooms/' + myRoomId).update({
-                                        currentQuestion: currentQIndex + 1,
-                                        currentQuestionStartTime: newStartTime
-                                    });
-                                }
-                            });
+                        document.getElementById('time-up').classList.remove('hidden');
+                        document.getElementById('waiting-all').classList.add('hidden');
+                        
+                        // 🔥 ОДИН ЗАПУСК ПЕРЕХОДА - БЕЗ ЦИКЛОВ
+                        timerTimeout = setTimeout(() => {
+                            nextQuestion();
                         }, 2000);
+                    } else {
+                        document.getElementById('waiting-all').classList.remove('hidden');
                     }
                 }
             };
             
             updateTimer();
-            localTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        // 🔥 ОТДЕЛЬНАЯ ФУНКЦИЯ ПЕРЕХОДА
+        function nextQuestion() {
+            if (!isCreator) return;
+            
+            db.ref('rooms/' + myRoomId).transaction(currentData => {
+                if (currentData && currentData.status === 'playing' && currentData.currentQuestion === currentQIndex) {
+                    const now = Date.now();
+                    return { 
+                        ...currentData, 
+                        currentQuestion: currentData.currentQuestion + 1,
+                        currentQuestionStartTime: now
+                    };
+                }
+                return currentData;
+            });
         }
 
         function loadQuestionUI(qData) {
@@ -959,8 +950,7 @@
         function finishGame() {
             if (gameListener) db.ref('rooms/' + myRoomId).off('value', gameListener);
             if (scoresListener) db.ref('rooms/' + myRoomId + '/scores').off('value', scoresListener);
-            if (timerListener) db.ref('rooms/' + myRoomId).off('value', timerListener);
-            if (localTimerInterval) clearInterval(localTimerInterval);
+            if (timerTimeout) clearTimeout(timerTimeout);
             
             goToScreen('screen-results');
             showLeaderboard();
