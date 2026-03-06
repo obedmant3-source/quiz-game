@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Космическая Викторина: Авто-режим</title>
+    <title>🚀 Космическая Викторина: Таймер</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;700&display=swap');
         
@@ -221,20 +221,38 @@
         }
         .info-value { color: #00ffff; font-family: 'Orbitron'; font-weight: bold; }
         
-        .progress-indicator {
-            background: rgba(0, 255, 255, 0.1);
-            border: 1px solid #00ffff;
-            border-radius: 20px;
-            padding: 8px 15px;
-            font-size: 13px;
-            color: #ffff00;
-            font-family: 'Orbitron';
-            animation: pulseProgress 1.5s infinite;
+        /* --- TIMER DISPLAY --- */
+        .timer-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 100, 100, 0.15);
+            border: 2px solid #ff6666;
+            border-radius: 25px;
+            padding: 8px 20px;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #ff6666;
+            animation: timerPulse 1s infinite;
         }
-        @keyframes pulseProgress { 
-            0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 0, 0.3); } 
-            50% { box-shadow: 0 0 20px rgba(255, 255, 0, 0.6); } 
+        .timer-container.warning {
+            background: rgba(255, 200, 0, 0.15);
+            border-color: #ffcc00;
+            color: #ffcc00;
+            animation: timerPulse 0.5s infinite;
         }
+        .timer-container.danger {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: #ff0000;
+            color: #ff0000;
+            animation: timerPulse 0.3s infinite;
+        }
+        @keyframes timerPulse { 
+            0%, 100% { transform: scale(1); box-shadow: 0 0 10px currentColor; } 
+            50% { transform: scale(1.05); box-shadow: 0 0 20px currentColor; } 
+        }
+        .timer-icon { font-size: 1.3rem; }
         
         .question-box { font-size: 1.3rem; margin: 20px 0; color: #fff; min-height: 70px; display: flex; align-items: center; justify-content: center; }
         
@@ -358,9 +376,45 @@
             font-size: 15px;
             color: #ffff00;
             font-weight: bold;
-            animation: pulseWait 1s infinite;
         }
-        @keyframes pulseWait { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+        .time-up-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff0000;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 18px;
+            color: #ff6666;
+            font-weight: bold;
+            font-family: 'Orbitron';
+            animation: flashRed 0.5s infinite;
+        }
+        @keyframes flashRed { 
+            0%, 100% { background: rgba(255, 0, 0, 0.2); } 
+            50% { background: rgba(255, 0, 0, 0.4); } 
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ffff, #0080ff);
+            transition: width 1s linear;
+            border-radius: 10px;
+        }
+        .progress-bar-fill.warning {
+            background: linear-gradient(90deg, #ffcc00, #ff9900);
+        }
+        .progress-bar-fill.danger {
+            background: linear-gradient(90deg, #ff6666, #ff0000);
+        }
     </style>
 </head>
 <body>
@@ -431,8 +485,17 @@
                 <div>📍 <span class="info-value" id="game-team">-</span></div>
                 <div>❓ <span class="info-value" id="game-question-num">1</span>/<span id="game-total-questions">30</span></div>
                 <div>⭐ <span class="info-value" id="game-score">0</span></div>
-                <div class="progress-indicator" id="progress-indicator">⏳ 0/0</div>
+                <div class="timer-container" id="timer-display">
+                    <span class="timer-icon">⏱️</span>
+                    <span id="timer-value">30</span>
+                </div>
             </div>
+            
+            <!-- Прогресс-бар таймера -->
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="timer-progress" style="width: 100%"></div>
+            </div>
+            
             <div class="question-box" id="question-text">Загрузка...</div>
             <div class="options" id="options-container"></div>
             
@@ -440,11 +503,17 @@
                 <div class="status-message" id="status-text">Ответ принят!</div>
             </div>
             
-            <!-- Сообщение ожидания для всех -->
+            <!-- Сообщение ожидания -->
             <div id="waiting-all" class="hidden">
                 <div class="waiting-message">
-                    ⏳ Ждём остальные команды...<br>
-                    <span id="waiting-count" style="font-size: 18px;">0 из 0 ответили</span>
+                    ⏳ Ждём окончания времени...
+                </div>
+            </div>
+            
+            <!-- Время вышло -->
+            <div id="time-up" class="hidden">
+                <div class="time-up-message">
+                    ⏰ ВРЕМЯ ВЫШЛО!
                 </div>
             </div>
         </div>
@@ -487,6 +556,9 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+
+        // --- КОНСТАНТЫ ---
+        const QUESTION_TIME_SECONDS = 30; // Время на один вопрос (секунды)
 
         // --- VISUALS ---
         function createStars() {
@@ -548,11 +620,12 @@
         let roomListener = null;
         let gameListener = null;
         let scoresListener = null;
-        let answersListener = null;
+        let timerListener = null;
         let currentQIndex = 0;
         let allTeamsScores = {};
         let hasAnswered = false;
         let totalTeamsCount = 0;
+        let localTimerInterval = null;
 
         function goToScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -576,7 +649,9 @@
                 teams: [name],
                 status: 'waiting',
                 currentQuestion: 0,
-                scores: { [name]: 0 }
+                scores: { [name]: 0 },
+                timerStart: null,
+                currentQuestionStartTime: null
             }).then(() => {
                 goToScreen('screen-lobby-wait');
                 setupRoomListener(code);
@@ -626,6 +701,7 @@
                     return room;
                 });
             }
+            if (localTimerInterval) clearInterval(localTimerInterval);
             location.reload();
         }
 
@@ -712,7 +788,13 @@
                 alert('⛔ Только создатель комнаты (с короной) может начать игру!');
                 return;
             }
-            db.ref('rooms/' + myRoomId).update({ status: 'playing', currentQuestion: 0 });
+            const now = Date.now();
+            db.ref('rooms/' + myRoomId).update({ 
+                status: 'playing', 
+                currentQuestion: 0,
+                timerStart: now,
+                currentQuestionStartTime: now
+            });
         }
 
         function startGameClientSide() {
@@ -731,6 +813,7 @@
             goToScreen('screen-game');
             setupGameListener();
             setupScoresListener();
+            setupTimerListener();
             loadQuestionUI(questions[0]);
         }
 
@@ -752,8 +835,14 @@
                     
                     document.getElementById('answer-status').classList.add('hidden');
                     document.getElementById('waiting-all').classList.add('hidden');
+                    document.getElementById('time-up').classList.add('hidden');
                     
                     document.getElementById('game-question-num').textContent = qIndex + 1;
+                    
+                    // Сброс таймера для нового вопроса
+                    if (room.currentQuestionStartTime) {
+                        startLocalTimer(room.currentQuestionStartTime);
+                    }
                     
                     loadQuestionUI(questions[qIndex]);
                 }
@@ -770,9 +859,76 @@
             });
         }
 
+        // 🔥 НОВАЯ МЕХАНИКА: ТАЙМЕР
+        function setupTimerListener() {
+            timerListener = db.ref('rooms/' + myRoomId).on('value', (snapshot) => {
+                const room = snapshot.val();
+                if (!room || !room.currentQuestionStartTime) return;
+                
+                startLocalTimer(room.currentQuestionStartTime);
+            });
+        }
+
+        function startLocalTimer(startTime) {
+            if (localTimerInterval) clearInterval(localTimerInterval);
+            
+            const updateTimer = () => {
+                const now = Date.now();
+                const elapsed = Math.floor((now - startTime) / 1000);
+                const remaining = Math.max(0, QUESTION_TIME_SECONDS - elapsed);
+                
+                // Обновляем отображение
+                const timerDisplay = document.getElementById('timer-display');
+                const timerValue = document.getElementById('timer-value');
+                const timerProgress = document.getElementById('timer-progress');
+                
+                timerValue.textContent = remaining;
+                
+                // Прогресс-бар
+                const progressPercent = (remaining / QUESTION_TIME_SECONDS) * 100;
+                timerProgress.style.width = progressPercent + '%';
+                
+                // Цветовые изменения
+                timerDisplay.classList.remove('warning', 'danger');
+                timerProgress.classList.remove('warning', 'danger');
+                
+                if (remaining <= 10 && remaining > 5) {
+                    timerDisplay.classList.add('warning');
+                    timerProgress.classList.add('warning');
+                } else if (remaining <= 5) {
+                    timerDisplay.classList.add('danger');
+                    timerProgress.classList.add('danger');
+                }
+                
+                // 🔥 Время вышло - переходим к следующему вопросу
+                if (remaining === 0) {
+                    document.getElementById('time-up').classList.remove('hidden');
+                    document.getElementById('waiting-all').classList.add('hidden');
+                    
+                    // Небольшая задержка перед следующим вопросом
+                    setTimeout(() => {
+                        db.ref('rooms/' + myRoomId).transaction(currentData => {
+                            if (currentData && currentData.status === 'playing') {
+                                const now = Date.now();
+                                return { 
+                                    ...currentData, 
+                                    currentQuestion: currentData.currentQuestion + 1,
+                                    currentQuestionStartTime: now
+                                };
+                            }
+                            return currentData;
+                        });
+                    }, 2000);
+                }
+            };
+            
+            updateTimer();
+            localTimerInterval = setInterval(updateTimer, 1000);
+        }
+
         function loadQuestionUI(qData) {
             document.getElementById('question-text').textContent = qData.q;
-            document.getElementById('progress-indicator').textContent = `⏳ 0/${totalTeamsCount}`;
+            document.getElementById('time-up').classList.add('hidden');
             
             const container = document.getElementById('options-container');
             container.innerHTML = '';
@@ -821,45 +977,16 @@
                 statusText.style.color = "#ff6666";
             }
 
-            // 🔥 ЗАПИСЫВАЕМ ОТВЕТ В БАЗУ
-            db.ref(`rooms/${myRoomId}/answers/${currentQIndex}/${myTeamName}`).set(true);
-
-            // 🔥 СЛУШАЕМ ПРОГРЕСС ОТВЕТОВ
-            const answersRef = db.ref(`rooms/${myRoomId}/answers/${currentQIndex}`);
-            
-            answersRef.on('value', (snapshot) => {
-                const answeredTeams = snapshot.val() || {};
-                const count = Object.keys(answeredTeams).length;
-                
-                // Обновляем индикатор прогресса рядом со счётом
-                document.getElementById('progress-indicator').textContent = `⏳ ${count}/${totalTeamsCount}`;
-                
-                // Показываем сообщение ожидания
-                const waitingDiv = document.getElementById('waiting-all');
-                const waitingCount = document.getElementById('waiting-count');
-                waitingDiv.classList.remove('hidden');
-                waitingCount.textContent = `${count} из ${totalTeamsCount} команд ответили`;
-
-                // 🔥 ЕСЛИ ВСЕ ОТВЕТИЛИ -> АВТОМАТИЧЕСКИ СЛЕДУЮЩИЙ ВОПРОС
-                if (count >= totalTeamsCount) {
-                    waitingCount.textContent = "✅ Все ответили! Загрузка следующего вопроса...";
-                    waitingCount.style.color = "#00ff00";
-                    
-                    setTimeout(() => {
-                        db.ref('rooms/' + myRoomId).transaction(currentData => {
-                            if (currentData && currentData.status === 'playing') {
-                                return { ...currentData, currentQuestion: currentData.currentQuestion + 1 };
-                            }
-                            return currentData;
-                        });
-                    }, 2000);
-                }
-            });
+            // Показываем сообщение ожидания
+            const waitingDiv = document.getElementById('waiting-all');
+            waitingDiv.classList.remove('hidden');
         }
 
         function finishGame() {
             if (gameListener) db.ref('rooms/' + myRoomId).off('value', gameListener);
             if (scoresListener) db.ref('rooms/' + myRoomId + '/scores').off('value', scoresListener);
+            if (timerListener) db.ref('rooms/' + myRoomId).off('value', timerListener);
+            if (localTimerInterval) clearInterval(localTimerInterval);
             
             goToScreen('screen-results');
             showLeaderboard();
